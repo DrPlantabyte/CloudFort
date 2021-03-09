@@ -10,7 +10,7 @@ import (
 	"regexp"
 )
 
-const CloudFortVersion = "1.0.0"
+const CloudFortVersion = "1.0.1"
 
 const (
 	STATUS_AVAILABLE   = "available"
