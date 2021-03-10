@@ -573,7 +573,7 @@ func writeHistoryLine(t time.Time, world string, overseer string, event string, 
 		return err
 	}
 	defer file.Close()
-	_, err = file.WriteString(fmt.Sprintf("%s,%s,\"%s\",\"%s\"\n", t.Format(time.RFC3339), world, overseer, event))
+	_, err = file.WriteString(fmt.Sprintf("%s,\"%s\",\"%s\",\"%s\"\n", t.Format(time.RFC3339), world, overseer, event))
 	if err != nil {
 		return err
 	}
