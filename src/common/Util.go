@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"archive/zip"
@@ -16,7 +16,7 @@ import (
 	"github.com/cheggaaa/pb"
 )
 
-func nameFromFile(f string) string {
+func NameFromFile(f string) string {
 	fname := filepath.Base(f)
 	i := strings.LastIndex(fname, ".")
 	if i > 0 {
@@ -25,14 +25,14 @@ func nameFromFile(f string) string {
 		return fname
 	}
 }
-func swapFileSuffix(fpath string, newSuffix string) string {
+func SwapFileSuffix(fpath string, newSuffix string) string {
 	parent := filepath.Dir(fpath)
-	root := nameFromFile(fpath)
+	root := NameFromFile(fpath)
 	fname := root + newSuffix
 	return filepath.Join(parent, fname)
 }
 
-func fileExists(fpath string) bool {
+func FileExists(fpath string) bool {
 	_, err := os.Stat(fpath)
 	if os.IsNotExist(err) {
 		return false
@@ -42,7 +42,7 @@ func fileExists(fpath string) bool {
 	return false
 }
 
-func hashFile(fpath string) (string, error) {
+func HashFile(fpath string) (string, error) {
 	f, err := os.Open(fpath)
 	if err != nil {
 		return "", err
@@ -57,7 +57,7 @@ func hashFile(fpath string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-func listFiles(dirPath string, suffix string) ([]string, error) {
+func ListFiles(dirPath string, suffix string) ([]string, error) {
 	allFiles, err := ioutil.ReadDir(dirPath)
 	if err != nil {
 		return make([]string, 0), err
@@ -71,7 +71,7 @@ func listFiles(dirPath string, suffix string) ([]string, error) {
 	}
 	return filtered, nil
 }
-func listDirs(dirPath string) ([]string, error) {
+func ListDirs(dirPath string) ([]string, error) {
 	allFiles, err := ioutil.ReadDir(dirPath)
 	if err != nil {
 		return make([]string, 0), err
@@ -86,7 +86,7 @@ func listDirs(dirPath string) ([]string, error) {
 	return filtered, nil
 }
 
-func unzipFiles(zipPath string, zipRoot string, dirPath string, filterFunc func(string) bool) error {
+func UnzipFiles(zipPath string, zipRoot string, dirPath string, filterFunc func(string) bool) error {
 	fmt.Printf("Extracting files from %s in %s to %s\n", zipRoot, zipPath, dirPath)
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -135,7 +135,7 @@ func unzipFiles(zipPath string, zipRoot string, dirPath string, filterFunc func(
 	return nil
 }
 
-func zipFiles(dirRoot string, files []string, destFile string) error {
+func ZipFiles(dirRoot string, files []string, destFile string) error {
 	outFile, err := os.Create(destFile)
 	if err != nil {
 		return err
@@ -173,7 +173,7 @@ func zipFiles(dirRoot string, files []string, destFile string) error {
 	}
 	return nil
 }
-func scanDir(dirPath string) ([]string, error) {
+func ScanDir(dirPath string) ([]string, error) {
 	files, err := ioutil.ReadDir(dirPath)
 	flist := make([]string, 0, len(files)) // make(type, initial size (nil-filled), initial capacity)
 	if err != nil {
@@ -186,7 +186,7 @@ func scanDir(dirPath string) ([]string, error) {
 			return make([]string, 0), err
 		}
 		if fi.IsDir() {
-			subfiles, err := scanDir(fpath)
+			subfiles, err := ScanDir(fpath)
 			if err != nil {
 				return make([]string, 0), err
 			}
@@ -198,11 +198,11 @@ func scanDir(dirPath string) ([]string, error) {
 	return flist, nil
 }
 
-func deleteDir(dirPath string) error {
+func DeleteDir(dirPath string) error {
 	return os.RemoveAll(dirPath)
 }
 
-func sendFile(r io.Reader, w io.Writer, numBytes int64, showProgBar bool) error {
+func SendFile(r io.Reader, w io.Writer, numBytes int64, showProgBar bool) error {
 	sizeBuffer := make([]byte, 8)
 	binary.BigEndian.PutUint64(sizeBuffer, uint64(numBytes))
 	_, err := w.Write(sizeBuffer)
@@ -236,7 +236,7 @@ func sendFile(r io.Reader, w io.Writer, numBytes int64, showProgBar bool) error 
 	}
 	return nil
 }
-func recvFile(r io.Reader, w io.Writer, showProgBar bool) error {
+func RecvFile(r io.Reader, w io.Writer, showProgBar bool) error {
 	sizeBuffer := make([]byte, 8)
 	_, err := r.Read(sizeBuffer)
 	if err != nil {
@@ -279,7 +279,7 @@ func minInt(a, b int64) int64 {
 	return a
 }
 
-func filterStrings(arr []string, cond func(string) bool) []string {
+func FilterStrings(arr []string, cond func(string) bool) []string {
 	result := make([]string, 0, len(arr))
 	for i := range arr {
 		if cond(arr[i]) {
@@ -289,7 +289,7 @@ func filterStrings(arr []string, cond func(string) bool) []string {
 	return result
 }
 
-func strToUtf8(s string) []byte {
+func StrToUtf8(s string) []byte {
 	bb := make([]byte, 0, len(s)*2)
 	ra := []rune(s)
 	for len(ra) > 0 {
@@ -300,7 +300,7 @@ func strToUtf8(s string) []byte {
 	}
 	return bb
 }
-func utf8ToStr(bb []byte) string {
+func Utf8ToStr(bb []byte) string {
 	ra := make([]rune, 0, len(bb))
 	for len(bb) > 0 {
 		r, size := utf8.DecodeRune(bb)

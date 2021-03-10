@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"cloudfort/common"
+	"cloudfort/server"
 )
 
 type ServerConfig struct {
@@ -32,7 +34,7 @@ type ServerConfig struct {
 	ServerOverseerName string
 }
 
-var statusMap map[string]LockToken
+var statusMap map[string]common.LockToken
 var statusLock sync.Mutex
 
 func main() {
@@ -91,17 +93,17 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 
 	// Responding to the client message
 	msg = strings.TrimSpace(msg)
-	if msg == COM_CONCHECK {
-		_, err = conx.Write(strToUtf8(fmt.Sprintf("%s\n", RESP_CONCHECK)))
+	if msg == common.COM_CONCHECK {
+		_, err = conx.Write(common.StrToUtf8(fmt.Sprintf("%s\n", common.RESP_CONCHECK)))
 		warn(err)
-	} else if strings.HasPrefix(msg, COM_STATUS) {
+	} else if strings.HasPrefix(msg, common.COM_STATUS) {
 		fmt.Printf("Client %s requested status of all worlds\n", conx.RemoteAddr().String())
 		// client requests list of worlds and their statuses
 		jstr, err := json.Marshal(statusSnapshot(false))
 		warn(err)
 		_, err = conx.Write(jstr)
 		warn(err)
-	} else if strings.HasPrefix(msg, COM_RELEASE) {
+	} else if strings.HasPrefix(msg, common.COM_RELEASE) {
 		sp := strings.SplitN(msg, ":", 4)
 		overseer := sp[1]
 		worldName := sp[2]
@@ -110,7 +112,7 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 		tok, exists := getStatus(worldName)
 		if !exists {
 			e := errors.New(fmt.Sprintf("No world named '%s'", worldName))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, e)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, e)))
 			warn(e)
 			return
 		}
@@ -118,21 +120,21 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 			// valid overseer
 			err = checkIn(worldName, overseer, config)
 			if err != nil {
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
 				return
 			}
 		} else {
 			e := errors.New(fmt.Sprintf("Overseer %s is not the currect holder of world %s", overseer, worldName))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, e)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, e)))
 			warn(e)
 			return
 		}
-	} else if strings.HasPrefix(msg, COM_CHECKOUT) {
+	} else if strings.HasPrefix(msg, common.COM_CHECKOUT) {
 		sp := strings.Split(msg, ":")
 		if len(sp) != 3 {
-			e := errors.New(fmt.Sprintf("%s:%s '%s'\n", RESP_ERROR, "Invalid Check-out command", msg))
-			conx.Write(strToUtf8(fmt.Sprintf("%v", e)))
+			e := errors.New(fmt.Sprintf("%s:%s '%s'\n", common.RESP_ERROR, "Invalid Check-out command", msg))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%v", e)))
 			warn(e)
 			return
 		}
@@ -145,34 +147,34 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 		fmt.Printf("Current status token for %s:\n%s\n", worldName, string(jsdbg))
 		if !exists {
 			e := errors.New(fmt.Sprintf("No world named '%s'", worldName))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, e)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, e)))
 			warn(e)
 			return
-		} else if !fileExists(wFilePath) {
+		} else if !common.FileExists(wFilePath) {
 			e := errors.New(fmt.Sprintf("File '%s' not found", wFilePath))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, e)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, e)))
 			warn(e)
 			return
-		} else if tok.Status != STATUS_AVAILABLE {
+		} else if tok.Status != common.STATUS_AVAILABLE {
 			// checked-out or otherwise unavailable
 			e := errors.New(fmt.Sprintf("World named '%s' cannot be checked-out because it's unavailable (status == %s)", worldName, tok.Status))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, e)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, e)))
 			warn(e)
 			return
 		} else {
 			// Can check-out!
 			fmt.Printf("Checking out world %s...\n", worldName)
 			fmt.Printf("Hashing file...")
-			hash, err := hashFile(wFilePath)
+			hash, err := common.HashFile(wFilePath)
 			fmt.Printf(" hash = '%s'\n", hash)
 			if err != nil {
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
 				return
 			}
 			fstat, err := os.Stat(wFilePath)
 			if err != nil {
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
 				return
 			}
@@ -182,7 +184,7 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 			//buf := make([]byte, 0x100000)
 			zipFileSrc, err := os.Open(wFilePath)
 			if err != nil {
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
 				return
 			}
@@ -190,71 +192,71 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 			fmt.Printf("Setting lock token to Downlaod\n")
 			downloadLock := tok
 			downloadLock.CurrentOverseer = overseer
-			downloadLock.Status = STATUS_DOWNLOADING
+			downloadLock.Status = common.STATUS_DOWNLOADING
 			dd, err := time.ParseDuration(config.DownloadTimeLimit)
 			if err != nil {
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
 				return
 			}
 			cd, err := time.ParseDuration(config.CheckOutTimeLimit)
 			if err != nil {
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
 				return
 			}
 			downloadLock.Expires = time.Now().Add(dd).Format(time.RFC3339)
 			downloadLock.MagicRunes = newMagicRunes()
 			oldStatus, _ := setStatus(worldName, downloadLock, config)
-			if oldStatus.Status != STATUS_AVAILABLE {
+			if oldStatus.Status != common.STATUS_AVAILABLE {
 				// Oops! Thread race accident! Clean-up!
 				setStatus(worldName, oldStatus, config)
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %s\n", RESP_ERROR, fmt.Sprintf("World named '%s' cannot be checked-out because it's unavailable (status == %s)", worldName, oldStatus.Status))))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %s\n", common.RESP_ERROR, fmt.Sprintf("World named '%s' cannot be checked-out because it's unavailable (status == %s)", worldName, oldStatus.Status))))
 				return
 			}
 			// prepare the checkout token (a copy will be sent to the client)
 			checkoutToken := downloadLock
-			checkoutToken.Status = STATUS_CHECKOUT
+			checkoutToken.Status = common.STATUS_CHECKOUT
 			checkoutToken.Expires = time.Now().Add(cd).Format(time.RFC3339)
 			tjstr, err := json.Marshal(checkoutToken)
 			if err != nil {
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
 				return
 			}
 			// finally, do the file transfer
 			fmt.Printf("Transmitting download response...\n")
-			conx.Write(strToUtf8(fmt.Sprintf("%s\n", RESP_DOWNLOAD)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s\n", common.RESP_DOWNLOAD)))
 			fmt.Printf("Transmitting token '%s'...\n", tjstr)
 			conx.Write(tjstr)
-			conx.Write(strToUtf8("\n"))
+			conx.Write(common.StrToUtf8("\n"))
 			fmt.Printf("Transmitting file hash...\n")
-			conx.Write(strToUtf8(fmt.Sprintf("%s\n", hash)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s\n", hash)))
 			fmt.Printf("Transmitting file data...\n")
 			//io.CopyBuffer(conx, zipFileSrc, buf)
-			err = sendFile(zipFileSrc, conx, fileSize, false)
+			err = common.SendFile(zipFileSrc, conx, fileSize, false)
 			if err != nil {
 				warn(err)
 				err2 := checkIn(worldName, overseer, config)
 				if err2 != nil {
 					warn(err2)
 				}
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				return
 			}
 			_, err = setStatus(worldName, checkoutToken, config)
 			if err != nil {
-				conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
 				return
 			} else {
-				conx.Write(strToUtf8(fmt.Sprintf("%s\n", RESP_SUCCESS)))
+				conx.Write(common.StrToUtf8(fmt.Sprintf("%s\n", common.RESP_SUCCESS)))
 			}
 			writeHistoryLine(time.Now(), worldName, overseer, fmt.Sprintf("World pulled from the cosmic aether by overseer %s", overseer), config)
 			fmt.Printf("...checkout done\n")
 		}
 		return
-	} else if strings.HasPrefix(msg, COM_CHECKIN) {
+	} else if strings.HasPrefix(msg, common.COM_CHECKIN) {
 		sp := strings.SplitN(msg, ":", 4)
 		overseer := sp[1]
 		worldName := sp[2]
@@ -264,30 +266,30 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 		lok, exists := getStatus(worldName)
 		if !exists {
 			err = errors.New(fmt.Sprintf("World %s does not exist on server", worldName))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
-		if lok.Status == STATUS_AVAILABLE {
+		if lok.Status == common.STATUS_AVAILABLE {
 			err = errors.New(fmt.Sprintf("World %s cannot be checked in because it has already been checked in", worldName))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		if lok.MagicRunes != magicRunes {
 			err = errors.New(fmt.Sprintf("Overseer %s is not the currect holder of world %s", overseer, worldName))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		// next, tell client that they may check-in
 		fmt.Printf("Permission granted for check-in\n")
-		conx.Write(strToUtf8(fmt.Sprintf("%s\n", RESP_UPLOAD)))
+		conx.Write(common.StrToUtf8(fmt.Sprintf("%s\n", common.RESP_UPLOAD)))
 		// next, read the upload file hash
 		fmt.Printf("Reading upload file hash...\n")
 		msg, err = clientReader.ReadString('\n')
 		if err != nil {
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
@@ -299,35 +301,35 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 		defer os.Remove(tmpFilePath)
 		tmpFile, err := os.OpenFile(tmpFilePath, os.O_WRONLY|os.O_CREATE, 0664)
 		if err != nil {
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		//buf := make([]byte, 0x100000)
 		//_, err = io.CopyBuffer(tmpFile, clientReader, buf)
-		err = recvFile(clientReader, tmpFile, false)
+		err = common.RecvFile(clientReader, tmpFile, false)
 		if err != nil {
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		err = tmpFile.Close()
 		if err != nil {
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		// check the hash to make sure the file is good
-		tmpHash, err := hashFile(tmpFilePath)
+		tmpHash, err := common.HashFile(tmpFilePath)
 		if err != nil {
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		fmt.Printf("Hash check:\n%s <- transmitted hash\n%s <- actual hash\n", hash, tmpHash)
 		if hash != tmpHash {
 			err = errors.New(fmt.Sprintf("File hash mis-match"))
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
@@ -337,27 +339,27 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 		backupPath := fmt.Sprintf("%s.backup", wFilePath)
 		err = os.Rename(wFilePath, backupPath) // backup existing save incase we need to undo
 		if err != nil {
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		err = copySave(tmpFilePath, wFilePath, config)
 		if err != nil {
 			os.Rename(backupPath, wFilePath)
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		// finally mark the world as checked-in
 		err = checkIn(worldName, overseer, config)
 		if err != nil {
-			conx.Write(strToUtf8(fmt.Sprintf("%s: %v\n", RESP_ERROR, err)))
+			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
 			return
 		}
 		// success!
 		fmt.Printf("Check-in sucessful!\n")
-		conx.Write(strToUtf8(fmt.Sprintf("%s\n", RESP_SUCCESS)))
+		conx.Write(common.StrToUtf8(fmt.Sprintf("%s\n", common.RESP_SUCCESS)))
 
 	} else {
 		// command not recognized
@@ -377,13 +379,13 @@ func expirationChecker(ticker *time.Ticker, done chan bool, config ServerConfig)
 			tnow := time.Now()
 			smap := statusSnapshot(true)
 			for world, token := range smap {
-				if token.Status != STATUS_AVAILABLE {
+				if token.Status != common.STATUS_AVAILABLE {
 					expTime, err := time.Parse(time.RFC3339, token.Expires)
 					if err != nil {
 						warn(errors.Wrap(err, "Error parsing exipration date"))
 					}
 					if err != nil || tnow.After(expTime) {
-						fmt.Printf("Lock for world %s has expired. Resetting status to %s\n", world, STATUS_AVAILABLE)
+						fmt.Printf("Lock for world %s has expired. Resetting status to %s\n", world, common.STATUS_AVAILABLE)
 						err = checkIn(world, config.ServerOverseerName, config)
 						if err != nil {
 							warn(errors.Wrapf(err, "Error checking-in world %s", world))
@@ -397,11 +399,11 @@ func expirationChecker(ticker *time.Ticker, done chan bool, config ServerConfig)
 
 func initialize() ServerConfig {
 	// init global variables
-	statusMap = make(map[string]LockToken)
+	statusMap = make(map[string]common.LockToken)
 	fmt.Print("Loading configuration...")
 	// first, load the config settings (saving the default if there is no config file)
 	defaultConfig := ServerConfig{
-		CloudFortVersion:   CloudFortVersion,
+		CloudFortVersion:   common.CloudFortVersion,
 		DFVersion:          "0.47.05",
 		WorldSaveFolder:    "save",
 		CheckOutTimeLimit:  "8h",
@@ -414,7 +416,7 @@ func initialize() ServerConfig {
 	}
 	var config ServerConfig
 	configFile := "server-config.json"
-	if !fileExists(configFile) {
+	if !common.FileExists(configFile) {
 		fmt.Println("Config file does not exist. Creating a new one...")
 		jstr, _ := json.MarshalIndent(defaultConfig, "", "\t")
 		err := ioutil.WriteFile(configFile, jstr, 0664)
@@ -437,43 +439,43 @@ func initialize() ServerConfig {
 	fail(err)
 	if newDir {
 		// if there wasn't a save directory before, seed it with a demo world as an example
-		data, fname := getDemoWorld()
+		data, fname := server.GetDemoWorld()
 		err := ioutil.WriteFile(filepath.Join(saveDir, fname), data, 0664)
 		fail(err)
 	}
 	_, err = ensureDir(config.TempFolder)
 	fail(err)
 	historyFile := filepath.Join(config.WorldSaveFolder, "history.csv")
-	if !fileExists(historyFile) {
+	if !common.FileExists(historyFile) {
 		err := ioutil.WriteFile(historyFile, []byte("Time,World,Overseer,Event\n"), 0664)
 		fail(err)
 	}
 	fmt.Println("Done.")
 	// then mark any un-tracked (ie new) .zip files as checked-in
-	zipFiles, err := listFiles(saveDir, ".zip")
+	zipFiles, err := common.ListFiles(saveDir, ".zip")
 	fail(err)
 	for _, f := range zipFiles {
-		worldName := nameFromFile(f)
-		lockFile := swapFileSuffix(f, ".dftk")
-		if !fileExists(lockFile) {
+		worldName := common.NameFromFile(f)
+		lockFile := common.SwapFileSuffix(f, ".dftk")
+		if !common.FileExists(lockFile) {
 			err = checkIn(worldName, config.ServerOverseerName, config)
 			warn(err)
 		}
 	}
 	// now read all .dftk files to sycronize world status
-	lockFiles, err := listFiles(saveDir, ".dftk")
+	lockFiles, err := common.ListFiles(saveDir, ".dftk")
 	for _, f := range lockFiles {
-		zipFile := swapFileSuffix(f, ".zip")
-		if !fileExists(zipFile) {
+		zipFile := common.SwapFileSuffix(f, ".zip")
+		if !common.FileExists(zipFile) {
 			warn(errors.New(fmt.Sprintf("%s found, but %s does not exist. Skipping.", f, zipFile)))
 			continue
 		}
 		jstr, err := ioutil.ReadFile(f)
 		fail(err)
-		var token LockToken
+		var token common.LockToken
 		err = json.Unmarshal(jstr, &token)
 		fail(err)
-		worldName := nameFromFile(f)
+		worldName := common.NameFromFile(f)
 		statusMap[worldName] = token
 	}
 	// finally, return the config
@@ -492,7 +494,7 @@ func serverSanityCheck(c ServerConfig) error {
 	return nil
 }
 
-func getStatus(worldName string) (LockToken, bool) {
+func getStatus(worldName string) (common.LockToken, bool) {
 	// first, lock to prevent de-sync
 	statusLock.Lock()
 	defer statusLock.Unlock()
@@ -501,7 +503,7 @@ func getStatus(worldName string) (LockToken, bool) {
 	return token, present
 }
 
-func setStatus(worldName string, newStatus LockToken, config ServerConfig) (LockToken, error) {
+func setStatus(worldName string, newStatus common.LockToken, config ServerConfig) (common.LockToken, error) {
 	// first, lock to prevent de-sync
 	statusLock.Lock()
 	defer statusLock.Unlock()
@@ -519,13 +521,13 @@ func setStatus(worldName string, newStatus LockToken, config ServerConfig) (Lock
 	return oldToken, nil
 }
 
-func statusSnapshot(showMagicRunes bool) map[string]LockToken {
+func statusSnapshot(showMagicRunes bool) map[string]common.LockToken {
 	// first, lock to prevent de-sync
 	statusLock.Lock()
 	defer statusLock.Unlock()
 	// then do work
-	var cp map[string]LockToken
-	cp = make(map[string]LockToken)
+	var cp map[string]common.LockToken
+	cp = make(map[string]common.LockToken)
 	for k, v := range statusMap {
 		v2 := v
 		if !showMagicRunes {
@@ -538,8 +540,8 @@ func statusSnapshot(showMagicRunes bool) map[string]LockToken {
 
 func checkIn(worldName string, overseer string, config ServerConfig) error {
 	tnow := time.Now()
-	token := LockToken{
-		Status:          STATUS_AVAILABLE,
+	token := common.LockToken{
+		Status:          common.STATUS_AVAILABLE,
 		Expires:         tnow.Format(time.RFC3339),
 		CurrentOverseer: overseer,
 		MagicRunes:      "0",
@@ -580,26 +582,26 @@ func writeHistoryLine(t time.Time, world string, overseer string, event string, 
 
 func copySave(srcZip string, destZip string, config ServerConfig) error {
 	fmt.Printf("Extracting save files from %s to %s...\n", srcZip, destZip)
-	var token LockToken
-	tmpDir := filepath.Join(config.TempFolder, nameFromFile(destZip))
-	defer deleteDir(tmpDir)
+	var token common.LockToken
+	tmpDir := filepath.Join(config.TempFolder, common.NameFromFile(destZip))
+	defer common.DeleteDir(tmpDir)
 	err := os.MkdirAll(tmpDir, 0775)
 	if err != nil {
 		return err
 	}
-	err = extractSave(srcZip, tmpDir, token)
+	err = common.ExtractSave(srcZip, tmpDir, token)
 	if err != nil {
 		return err
 	}
-	files, err := scanDir(tmpDir)
+	files, err := common.ScanDir(tmpDir)
 	if err != nil {
 		return err
 	}
 	// filter-out the lock token
-	files = filterStrings(files, func(g string) bool {
+	files = common.FilterStrings(files, func(g string) bool {
 		return !strings.HasSuffix(g, ".dftk")
 	})
-	err = zipFiles(tmpDir, files, destZip)
+	err = common.ZipFiles(tmpDir, files, destZip)
 	if err != nil {
 		return err
 	}
@@ -608,7 +610,7 @@ func copySave(srcZip string, destZip string, config ServerConfig) error {
 
 // returns true if it made a new dir
 func ensureDir(dirPath string) (bool, error) {
-	if !fileExists(dirPath) {
+	if !common.FileExists(dirPath) {
 		return true, os.MkdirAll(dirPath, 0777)
 	}
 	return false, nil

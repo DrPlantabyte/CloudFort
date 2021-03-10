@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"archive/zip"
@@ -41,10 +41,10 @@ type LockToken struct {
 	MagicRunes      string // validation hash generated unique for each check-out to prevent the wrong world from being checked in
 }
 
-var saveRegexes []*regexp.Regexp
+var SaveRegexes []*regexp.Regexp
 
 func init() {
-	saveRegexes = SaveFileRegexes()
+	SaveRegexes = SaveFileRegexes()
 }
 
 func SaveFileRegexes() []*regexp.Regexp {
@@ -69,7 +69,7 @@ func SaveFileRegexes() []*regexp.Regexp {
 
 // returns the root folder with world.dat|.sav
 // this function is needed because users may zip the whole folder or just the contents
-func findSaveZipRoot(zipPath string) (string, error) {
+func FindSaveZipRoot(zipPath string) (string, error) {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return "", err
@@ -86,14 +86,14 @@ func findSaveZipRoot(zipPath string) (string, error) {
 	return "", errors.New("Neither world.dat nor world.sav could be found")
 }
 
-func extractSave(zipPath string, destDir string, token LockToken) error {
+func ExtractSave(zipPath string, destDir string, token LockToken) error {
 	fmt.Printf("Extracting save files from %s to %s...\n", zipPath, destDir)
-	zroot, err := findSaveZipRoot(zipPath)
+	zroot, err := FindSaveZipRoot(zipPath)
 	if err != nil {
 		return err
 	}
-	err = unzipFiles(zipPath, zroot, destDir, func(path string) bool {
-		for _, m := range saveRegexes {
+	err = UnzipFiles(zipPath, zroot, destDir, func(path string) bool {
+		for _, m := range SaveRegexes {
 			if m.MatchString(path) {
 				return true
 			}

@@ -1,4 +1,4 @@
-package main
+package server
 
 import(
 	"encoding/base64"
@@ -7,14 +7,14 @@ import(
 )
 
 func test() {
-	fileData, fileName := getDemoWorld()
+	fileData, fileName := GetDemoWorld()
 	err := ioutil.WriteFile(fileName, fileData, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func getDemoWorld() ([]byte, string) {
+func GetDemoWorld() ([]byte, string) {
 	data, _ := base64.StdEncoding.DecodeString(`
 UEsDBBQAAAAAALxQWlIAAAAAAAAAAAAAAAAEACAAcmF3L1VUDQAHVC04YFQtOGBULThgdXgLAAEE
 6AMAAAToAwAAUEsDBBQACAAIALxQWlIAAAAAAAAAAJ4BAAAOACAAcmF3L3JlYWRtZS50eHRVVA0A

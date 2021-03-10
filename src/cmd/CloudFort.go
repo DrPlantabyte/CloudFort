@@ -17,6 +17,8 @@ import (
 
 	"github.com/gen2brain/dlgs"
 	"github.com/sqweek/dialog"
+	
+	"cloudfort/common"
 )
 
 type ClientConfig struct {
@@ -40,7 +42,7 @@ func main() {
 	foundDF := false
 	for _, binName := range []string{"Dwarf Fortress.exe", "dfhack", "df"} {
 		bp := filepath.Join(thisDir, binName)
-		if fileExists(bp) {
+		if common.FileExists(bp) {
 			dfPath = bp
 			foundDF = true
 			break
@@ -56,14 +58,14 @@ func main() {
 	fmt.Printf("Starting CloudFort in %s...\n", thisDir)
 
 	defaultConfig := ClientConfig{
-		CloudFortVersion: CloudFortVersion,
+		CloudFortVersion: common.CloudFortVersion,
 		HostName:         "localhost",
 		PortNumber:       13137,
 		OverseerName:     "",
 	}
 	var config ClientConfig
 	configFile := filepath.Join(thisDir, "CloudFort-config.json")
-	if !fileExists(configFile) {
+	if !common.FileExists(configFile) {
 		fmt.Println("Config file does not exist. Creating a new one...")
 		fmt.Println("...asking overseer for their name...")
 		for {
@@ -85,8 +87,8 @@ func main() {
 			defaultConfig.HostName = sa[0]
 			defaultConfig.PortNumber, err = strconv.ParseInt(sa[1], 10, 0)
 			if err == nil && ok {
-				resp, err := textServer(defaultConfig.HostName, int(defaultConfig.PortNumber), COM_CONCHECK)
-				if err == nil && strings.TrimSpace(resp) == RESP_CONCHECK {
+				resp, err := textServer(defaultConfig.HostName, int(defaultConfig.PortNumber), common.COM_CONCHECK)
+				if err == nil && strings.TrimSpace(resp) == common.RESP_CONCHECK {
 					// connection good
 					break
 				} else {
@@ -126,10 +128,10 @@ func main() {
 	hostName := config.HostName
 	portNum := int(config.PortNumber)
 	fmt.Printf("\tHost: %s\n\tPort: %d\n", hostName, portNum)
-	msg, err := textServer(hostName, portNum, COM_STATUS)
+	msg, err := textServer(hostName, portNum, common.COM_STATUS)
 	errCheck(err)
 	fmt.Println(msg)
-	var worlds map[string]LockToken
+	var worlds map[string]common.LockToken
 	err = json.Unmarshal([]byte(msg), &worlds)
 	errCheck(err)
 	worldLabels := make([]string, 0, 32)
@@ -173,15 +175,15 @@ func main() {
 }
 
 func checkWorldDirs(saveDir string, config ClientConfig) error {
-	saveWorldDirs, err := listDirs(saveDir)
+	saveWorldDirs, err := common.ListDirs(saveDir)
 	if err != nil {
 		return err
 	}
 	for _, worldDirPath := range saveWorldDirs {
 		tokenPath := filepath.Join(worldDirPath, "token.dftk")
-		if fileExists(tokenPath) {
+		if common.FileExists(tokenPath) {
 			jstr, err := ioutil.ReadFile(tokenPath)
-			var checkoutToken LockToken
+			var checkoutToken common.LockToken
 			err = json.Unmarshal(jstr, &checkoutToken)
 			errCheck(err)
 			worldName := filepath.Base(worldDirPath)
@@ -206,7 +208,7 @@ func checkWorldDirs(saveDir string, config ClientConfig) error {
 	return nil
 }
 
-func checkIn(worldDir string, token LockToken, config ClientConfig) error {
+func checkIn(worldDir string, token common.LockToken, config ClientConfig) error {
 	world := filepath.Base(worldDir)
 	fmt.Printf("Checking in world %s\n", world)
 	// first, zip the save to a temp file
@@ -221,17 +223,17 @@ func checkIn(worldDir string, token LockToken, config ClientConfig) error {
 		return err
 	}
 	fmt.Printf("Zipping region folder to %s...\n", zipPath)
-	saveFiles, err := scanDir(worldDir)
+	saveFiles, err := common.ScanDir(worldDir)
 	if err != nil {
 		return err
 	}
-	saveFiles = filterStrings(saveFiles, saveFileFilter)
-	err = zipFiles(worldDir, saveFiles, zipPath)
+	saveFiles = common.FilterStrings(saveFiles, saveFileFilter)
+	err = common.ZipFiles(worldDir, saveFiles, zipPath)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Hashing file %s...\n", zipPath)
-	hash, err := hashFile(zipPath)
+	hash, err := common.HashFile(zipPath)
 	if err != nil {
 		return err
 	}
@@ -250,7 +252,7 @@ func checkIn(worldDir string, token LockToken, config ClientConfig) error {
 	// send check-in request
 	fmt.Printf("Requesting checkin\n")
 	serverReader := bufio.NewReader(connection)
-	_, err = connection.Write(strToUtf8(fmt.Sprintf("%s:%s:%s:%s\n", COM_CHECKIN, config.OverseerName, world, token.MagicRunes)))
+	_, err = connection.Write(common.StrToUtf8(fmt.Sprintf("%s:%s:%s:%s\n", common.COM_CHECKIN, config.OverseerName, world, token.MagicRunes)))
 	if err != nil {
 		return err
 	}
@@ -259,10 +261,10 @@ func checkIn(worldDir string, token LockToken, config ClientConfig) error {
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(resp) == RESP_UPLOAD {
+	if strings.TrimSpace(resp) == common.RESP_UPLOAD {
 		// server gave the go-ahead, proceed
 		fmt.Printf("Sending hash %s\n", hash)
-		_, err = connection.Write(strToUtf8(fmt.Sprintf("%s\n", hash)))
+		_, err = connection.Write(common.StrToUtf8(fmt.Sprintf("%s\n", hash)))
 		if err != nil {
 			return err
 		}
@@ -274,18 +276,18 @@ func checkIn(worldDir string, token LockToken, config ClientConfig) error {
 		}
 		//buf := make([]byte, 0x100000)
 		//_, err = io.CopyBuffer(connection, tf, buf)
-		err = sendFile(tf, connection, fstat.Size(), true)
+		err = common.SendFile(tf, connection, fstat.Size(), true)
 		if err != nil {
 			return err
 		}
 		// did it succeed?
 		resp, err := serverReader.ReadString('\n')
 		fmt.Printf("Server response: %s\n", resp)
-		if strings.TrimSpace(resp) != RESP_SUCCESS {
+		if strings.TrimSpace(resp) != common.RESP_SUCCESS {
 			err = errors.New(resp)
 			return err
 		}
-		deleteDir(worldDir)
+		common.DeleteDir(worldDir)
 		fmt.Printf("Check-in complete\n")
 	} else {
 		e := errors.New(resp)
@@ -297,7 +299,7 @@ func checkIn(worldDir string, token LockToken, config ClientConfig) error {
 func checkOut(world string, saveDir string, config ClientConfig) error {
 	// check for name collision
 	dirPath := filepath.Join(saveDir, world)
-	if fileExists(dirPath) {
+	if common.FileExists(dirPath) {
 		// save folder already exists!
 		return errors.New(fmt.Sprintf("Cannot checkout save for world %s because save folder %s already exists", world, dirPath))
 	}
@@ -312,7 +314,7 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 	//
 	fmt.Printf("Requesting checkout\n")
 	serverReader := bufio.NewReader(connection)
-	_, err = connection.Write(strToUtf8(fmt.Sprintf("%s:%s:%s\n", COM_CHECKOUT, config.OverseerName, world)))
+	_, err = connection.Write(common.StrToUtf8(fmt.Sprintf("%s:%s:%s\n", common.COM_CHECKOUT, config.OverseerName, world)))
 	if err != nil {
 		return err
 	}
@@ -321,10 +323,10 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 	if err != nil {
 		return err
 	}
-	if strings.HasPrefix(resp, RESP_ERROR) {
+	if strings.HasPrefix(resp, common.RESP_ERROR) {
 		e := errors.New(resp)
 		return e
-	} else if strings.TrimSpace(resp) == RESP_DOWNLOAD {
+	} else if strings.TrimSpace(resp) == common.RESP_DOWNLOAD {
 		// yes it is available, proceed to download
 		// first, read the lock token for the magic rune sequence
 		jstr, err := serverReader.ReadString('\n')
@@ -332,7 +334,7 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 		if err != nil {
 			return err
 		}
-		var checkoutToken LockToken
+		var checkoutToken common.LockToken
 		err = json.Unmarshal([]byte(jstr), &checkoutToken)
 		if err != nil {
 			return err
@@ -352,7 +354,7 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 		defer os.Remove(outFile.Name())
 		//buf := make([]byte, 0x100000)
 		//_, err = io.CopyBuffer(outFile, serverReader, buf)
-		err = recvFile(serverReader, outFile, true)
+		err = common.RecvFile(serverReader, outFile, true)
 		if err != nil {
 			return err
 		}
@@ -369,7 +371,7 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 			}
 		}
 		// now check the hashes to guard against incomplete (or tampered) data transfer
-		fhash, err := hashFile(outFile.Name())
+		fhash, err := common.HashFile(outFile.Name())
 		errCheck(err)
 		fmt.Printf("Hash check:\n    server hash: %s\n  download hash: %s\n", hash, fhash)
 		if hash != fhash {
@@ -379,7 +381,7 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 		}
 		// finally, extract only relevant files from download to save folder
 		fmt.Printf("Extracting files from %s to %s\n", outFile.Name(), dirPath)
-		err = extractSave(outFile.Name(), dirPath, checkoutToken)
+		err = common.ExtractSave(outFile.Name(), dirPath, checkoutToken)
 		if err != nil {
 			defer undoFunc(err)
 			return err
@@ -391,11 +393,11 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 
 func cancelCheckOut(world string, overseer string, worldMagicRunes string, config ClientConfig) error {
 	// tell server to make this world available again without checking it back in
-	resp, err := textServer(config.HostName, int(config.PortNumber), fmt.Sprintf("%s:%s:%s:%s", COM_RELEASE, overseer, world, worldMagicRunes))
+	resp, err := textServer(config.HostName, int(config.PortNumber), fmt.Sprintf("%s:%s:%s:%s", common.COM_RELEASE, overseer, world, worldMagicRunes))
 	if err != nil {
 		return err
 	}
-	if strings.HasPrefix(resp, RESP_ERROR) {
+	if strings.HasPrefix(resp, common.RESP_ERROR) {
 		e := errors.New(resp)
 		return e
 	}
@@ -436,7 +438,7 @@ func textServer(hostName string, portNum int, msg string) (string, error) {
 	defer connection.Close()
 	//
 	serverReader := bufio.NewReader(connection)
-	_, err = connection.Write(strToUtf8(fmt.Sprintf("%s\n", msg)))
+	_, err = connection.Write(common.StrToUtf8(fmt.Sprintf("%s\n", msg)))
 	fmt.Printf("sent %v", msg)
 	if err != nil {
 		errMsg := fmt.Sprintf("I/O error: errChecked to send message to server \n\t%v", err)
@@ -447,7 +449,7 @@ func textServer(hostName string, portNum int, msg string) (string, error) {
 	return serverResponse, nil
 }
 func saveFileFilter(s string) bool {
-	for _, regex := range saveRegexes {
+	for _, regex := range common.SaveRegexes {
 		if regex.MatchString(s) {
 			return true
 		}
