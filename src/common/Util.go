@@ -309,3 +309,12 @@ func Utf8ToStr(bb []byte) string {
 	}
 	return string(ra)
 }
+
+func CSVQuote(s string) string {
+	if strings.Contains(s, "\"") || strings.Contains(s, ",") || strings.Contains(s, " ") || strings.Contains(s, "\n") || strings.Contains(s, "\r") || strings.Contains(s, "\t") {
+		s2 := strings.ReplaceAll(s, "\"", "\"\"")
+		return fmt.Sprintf("\"%s\"", s2)
+	} else {
+		return s
+	}
+}
