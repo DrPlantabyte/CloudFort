@@ -17,7 +17,7 @@ import (
 
 	"github.com/gen2brain/dlgs"
 	"github.com/sqweek/dialog"
-	
+
 	"cloudfort/common"
 )
 
@@ -354,7 +354,7 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 		defer os.Remove(outFile.Name())
 		//buf := make([]byte, 0x100000)
 		//_, err = io.CopyBuffer(outFile, serverReader, buf)
-		err = common.RecvFile(serverReader, outFile, true)
+		err = common.RecvFile(serverReader, outFile, true, -1)
 		if err != nil {
 			return err
 		}

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"crypto/md5"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -236,7 +237,7 @@ func SendFile(r io.Reader, w io.Writer, numBytes int64, showProgBar bool) error 
 	}
 	return nil
 }
-func RecvFile(r io.Reader, w io.Writer, showProgBar bool) error {
+func RecvFile(r io.Reader, w io.Writer, showProgBar bool, sizeLimit int64) error {
 	sizeBuffer := make([]byte, 8)
 	_, err := r.Read(sizeBuffer)
 	if err != nil {
@@ -260,6 +261,10 @@ func RecvFile(r io.Reader, w io.Writer, showProgBar bool) error {
 		}
 		//fmt.Printf("\tread %d bytes\n", c)
 		count += int64(c)
+		if sizeLimit > 0 && count > sizeLimit {
+			// file too big!
+			return errors.New(fmt.Sprintf("File size limit exceeded (max bytes == %d)", sizeLimit))
+		}
 		//time.Sleep(time.Millisecond * 100) // uncomment to test slowconnection
 		_, err = w.Write(buffer[:c])
 		if err != nil {

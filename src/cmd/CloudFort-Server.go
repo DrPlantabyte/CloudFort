@@ -16,9 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"cloudfort/common"
 	"cloudfort/server"
+
+	"github.com/pkg/errors"
 )
 
 type ServerConfig struct {
@@ -307,7 +308,7 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 		}
 		//buf := make([]byte, 0x100000)
 		//_, err = io.CopyBuffer(tmpFile, clientReader, buf)
-		err = common.RecvFile(clientReader, tmpFile, false)
+		err = common.RecvFile(clientReader, tmpFile, false, int64(config.WorldSizeLimitMB)*1000000)
 		if err != nil {
 			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
