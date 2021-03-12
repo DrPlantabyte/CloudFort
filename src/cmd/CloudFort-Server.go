@@ -119,7 +119,7 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 		}
 		if tok.MagicRunes == magicRunes {
 			// valid overseer
-			err = checkIn(worldName, overseer, config)
+			err = checkInWorld(worldName, overseer, config)
 			if err != nil {
 				conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 				warn(err)
@@ -238,7 +238,7 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 			err = common.SendFile(zipFileSrc, conx, fileSize, false)
 			if err != nil {
 				warn(err)
-				err2 := checkIn(worldName, overseer, config)
+				err2 := checkInWorld(worldName, overseer, config)
 				if err2 != nil {
 					warn(err2)
 				}
@@ -352,7 +352,7 @@ func handleClientRequest(conx net.Conn, config ServerConfig) {
 			return
 		}
 		// finally mark the world as checked-in
-		err = checkIn(worldName, overseer, config)
+		err = checkInWorld(worldName, overseer, config)
 		if err != nil {
 			conx.Write(common.StrToUtf8(fmt.Sprintf("%s: %v\n", common.RESP_ERROR, err)))
 			warn(err)
@@ -387,7 +387,7 @@ func expirationChecker(ticker *time.Ticker, done chan bool, config ServerConfig)
 					}
 					if err != nil || tnow.After(expTime) {
 						fmt.Printf("Lock for world %s has expired. Resetting status to %s\n", world, common.STATUS_AVAILABLE)
-						err = checkIn(world, config.ServerOverseerName, config)
+						err = checkInWorld(world, config.ServerOverseerName, config)
 						if err != nil {
 							warn(errors.Wrapf(err, "Error checking-in world %s", world))
 						}
@@ -459,7 +459,7 @@ func initialize() ServerConfig {
 		worldName := common.NameFromFile(f)
 		lockFile := common.SwapFileSuffix(f, ".dftk")
 		if !common.FileExists(lockFile) {
-			err = checkIn(worldName, config.ServerOverseerName, config)
+			err = checkInWorld(worldName, config.ServerOverseerName, config)
 			warn(err)
 		}
 	}
@@ -539,7 +539,7 @@ func statusSnapshot(showMagicRunes bool) map[string]common.LockToken {
 	return cp
 }
 
-func checkIn(worldName string, overseer string, config ServerConfig) error {
+func checkInWorld(worldName string, overseer string, config ServerConfig) error {
 	tnow := time.Now()
 	token := common.LockToken{
 		Status:          common.STATUS_AVAILABLE,
