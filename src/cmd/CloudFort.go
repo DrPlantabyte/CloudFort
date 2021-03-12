@@ -121,36 +121,38 @@ func main() {
 	errCheck(err)
 
 	fmt.Printf("...checking save folders for left-over check-outs...\n")
-	err = checkWorldDirs(saveDir, config)
+	keepCheckedOutWorld, err := checkWorldDirs(saveDir, config)
 	errCheck(err)
 
 	fmt.Printf("...connecting to server...\n")
 	hostName := config.HostName
 	portNum := int(config.PortNumber)
 	fmt.Printf("\tHost: %s\n\tPort: %d\n", hostName, portNum)
-	msg, err := textServer(hostName, portNum, common.COM_STATUS)
-	errCheck(err)
-	fmt.Println(msg)
-	var worlds map[string]common.LockToken
-	err = json.Unmarshal([]byte(msg), &worlds)
-	errCheck(err)
-	worldLabels := make([]string, 0, 32)
-	label2WorldMap := make(map[string]string)
-	for k, v := range worlds {
-		fmt.Printf("%s: %s\n", k, v.Status)
-		wl := fmt.Sprintf("%s: %s", k, v.Status)
-		worldLabels = append(worldLabels, wl)
-		label2WorldMap[wl] = k
-	}
-	item, _, err := dlgs.List("CloudFort World Selection", "Select a world:", worldLabels)
-	errCheck(err)
-	if item == "" {
-		fmt.Println("No world selected.")
-	} else {
-		worldSelect := label2WorldMap[item]
-		fmt.Printf("Selected %s", worldSelect)
-		err := checkOut(worldSelect, saveDir, config)
+	if !keepCheckedOutWorld {
+		msg, err := textServer(hostName, portNum, common.COM_STATUS)
 		errCheck(err)
+		fmt.Println(msg)
+		var worlds map[string]common.LockToken
+		err = json.Unmarshal([]byte(msg), &worlds)
+		errCheck(err)
+		worldLabels := make([]string, 0, 32)
+		label2WorldMap := make(map[string]string)
+		for k, v := range worlds {
+			fmt.Printf("%s: %s\n", k, v.Status)
+			wl := fmt.Sprintf("%s: %s", k, v.Status)
+			worldLabels = append(worldLabels, wl)
+			label2WorldMap[wl] = k
+		}
+		item, _, err := dlgs.List("CloudFort World Selection", "Select a world:", worldLabels)
+		errCheck(err)
+		if item == "" {
+			fmt.Println("No world selected.")
+		} else {
+			worldSelect := label2WorldMap[item]
+			fmt.Printf("Selected %s", worldSelect)
+			err := checkOut(worldSelect, saveDir, config)
+			errCheck(err)
+		}
 	}
 
 	//os.Exit(0)
@@ -163,7 +165,7 @@ func main() {
 	// DF returns error code even on normal exit
 
 	fmt.Println("...DF closed. Checking-in CloudFort worlds,please do not close this window...")
-	err = checkWorldDirs(saveDir, config)
+	_, err = checkWorldDirs(saveDir, config)
 	errCheck(err)
 
 	fmt.Println("...Complete! Terminating CloudFort...")
@@ -174,10 +176,11 @@ func main() {
 
 }
 
-func checkWorldDirs(saveDir string, config ClientConfig) error {
+func checkWorldDirs(saveDir string, config ClientConfig) (bool, error) {
+	keepCheckoutWorld := false
 	saveWorldDirs, err := common.ListDirs(saveDir)
 	if err != nil {
-		return err
+		return keepCheckoutWorld, err
 	}
 	for _, worldDirPath := range saveWorldDirs {
 		tokenPath := filepath.Join(worldDirPath, "token.dftk")
@@ -202,10 +205,12 @@ func checkWorldDirs(saveDir string, config ClientConfig) error {
 				fmt.Printf("User requested to revert %s\n", worldName)
 				err := cancelCheckOut(worldName, saveDir, config.OverseerName, checkoutToken.MagicRunes, config)
 				errCheck(err)
+			} else {
+				keepCheckoutWorld = true
 			}
 		}
 	}
-	return nil
+	return keepCheckoutWorld, nil
 }
 
 func checkIn(worldDir string, token common.LockToken, config ClientConfig) error {
@@ -449,13 +454,13 @@ func textServer(hostName string, portNum int, msg string) (string, error) {
 	//
 	serverReader := bufio.NewReader(connection)
 	_, err = connection.Write(common.StrToUtf8(fmt.Sprintf("%s\n", msg)))
-	fmt.Printf("sent %v", msg)
+	fmt.Printf("sent %v\n", msg)
 	if err != nil {
 		errMsg := fmt.Sprintf("I/O error: errChecked to send message to server \n\t%v", err)
 		return "", errors.New(errMsg)
 	}
 	serverResponse, err := serverReader.ReadString('\n')
-	fmt.Printf("received %v", serverResponse)
+	fmt.Printf("received %v\n", serverResponse)
 	return serverResponse, nil
 }
 func saveFileFilter(s string) bool {
