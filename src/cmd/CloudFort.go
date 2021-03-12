@@ -200,7 +200,7 @@ func checkWorldDirs(saveDir string, config ClientConfig) error {
 				errCheck(err)
 			} else if yesRevert {
 				fmt.Printf("User requested to revert %s\n", worldName)
-				err := cancelCheckOut(worldName, config.OverseerName, checkoutToken.MagicRunes, config)
+				err := cancelCheckOut(worldName, saveDir, config.OverseerName, checkoutToken.MagicRunes, config)
 				errCheck(err)
 			}
 		}
@@ -287,7 +287,10 @@ func checkIn(worldDir string, token common.LockToken, config ClientConfig) error
 			err = errors.New(resp)
 			return err
 		}
-		common.DeleteDir(worldDir)
+		err = common.DeleteDir(worldDir)
+		if err != nil {
+			return err
+		}
 		fmt.Printf("Check-in complete\n")
 	} else {
 		e := errors.New(resp)
@@ -365,7 +368,7 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 		fmt.Printf("Data transferred!\n")
 		undoFunc := func(e error) {
 			fmt.Printf("Check-out failed, checking back in...\n")
-			err2 := cancelCheckOut(world, config.OverseerName, checkoutToken.MagicRunes, config)
+			err2 := cancelCheckOut(world, saveDir, config.OverseerName, checkoutToken.MagicRunes, config)
 			if err2 != nil {
 				errCheck(errors.New(fmt.Sprintf("Double error: %v; %v", e, err2)))
 			}
@@ -391,7 +394,7 @@ func checkOut(world string, saveDir string, config ClientConfig) error {
 	return nil
 }
 
-func cancelCheckOut(world string, overseer string, worldMagicRunes string, config ClientConfig) error {
+func cancelCheckOut(world string, saveDir string, overseer string, worldMagicRunes string, config ClientConfig) error {
 	// tell server to make this world available again without checking it back in
 	resp, err := textServer(config.HostName, int(config.PortNumber), fmt.Sprintf("%s:%s:%s:%s", common.COM_RELEASE, overseer, world, worldMagicRunes))
 	if err != nil {
@@ -400,6 +403,13 @@ func cancelCheckOut(world string, overseer string, worldMagicRunes string, confi
 	if strings.HasPrefix(resp, common.RESP_ERROR) {
 		e := errors.New(resp)
 		return e
+	}
+	worldDir := filepath.Join(saveDir, world)
+	if common.FileExists(worldDir) {
+		err = common.DeleteDir(worldDir)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
